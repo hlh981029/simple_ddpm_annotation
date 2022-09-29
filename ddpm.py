@@ -298,7 +298,9 @@ class Unet(nn.Module):
         # x size [BS, CHN, IMAGE_SIZE, IMAGE_SIZE] - 输入的照片
         x = self.init_conv(x)
 
-        # time_mlp [BS, IMAGE_SIZE*4] - time_mlp GDH ? 这里的time 和 t 关系是什么
+        # time_mlp 是一个timestamp的bias
+        # time  [BS]                -   对应文章里面的t
+        # t     [BS, IMAGE_SIZE*4]  -   timestamp 的 embedding
         t = self.time_mlp(time) if exists(self.time_mlp) else None
 
         h = []
@@ -307,7 +309,7 @@ class Unet(nn.Module):
         # x from [BS, 18, IMAGE_SIZE, IMAGE_SIZE] to [BS, 28, IMAGE_SIZE//2, IMAGE_SIZE//2]
         #   to [BS, 56, IMAGE_SIZE//4, IMAGE_SIZE//4] to [BS, 112, IMAGE_SIZE//4, IMAGE_SIZE//4]
         for block1, block2, attn, downsample in self.downs:
-            x = block1(x, t)
+            x = block1(x, t)    # t - timestamp embedding 加入到block中
             x = block2(x, t)
             x = attn(x)
             h.append(x)
@@ -510,7 +512,7 @@ def p_sample(model, x, t, t_index):
 # 算法2
 @torch.no_grad()
 def p_sample_loop(model, shape):
-    device = next(model.parameters()).device # next ?
+    device = next(model.parameters()).device # next
 
     b = shape[0]
     # start from pure noise (for each example in the batch)

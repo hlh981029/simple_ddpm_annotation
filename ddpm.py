@@ -360,7 +360,7 @@ def sigmoid_beta_schedule(timesteps):
     betas = torch.linspace(-6, 6, timesteps)
     return torch.sigmoid(betas) * (beta_end - beta_start) + beta_start
 
-timesteps = 50
+timesteps = 2000
 
 # define beta schedule
 betas = linear_beta_schedule(timesteps=timesteps)
@@ -454,7 +454,7 @@ def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
 
 image_size = 28
 channels = 1
-batch_size = 128
+batch_size = 256
 import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -476,7 +476,7 @@ from datasets import load_dataset
 
 # load dataset from the hub
 print("Begin loading data")
-# dataset = load_dataset("fashion_mnist", data_dir="/Users/dehong.gdh/Documents/work/workspace/fashion-mnist/data/")
+# dataset = load_dataset("fashion_mnist", data_dir="~/workspace/workgroup/fashion-mnist/data/fashion/")
 dataset = load_dataset("fashion_mnist")
 print("Done Loading data")
 
@@ -543,8 +543,8 @@ save_and_sample_every = 1000
 
 from torch.optim import Adam
 
-device = "cpu"
-# device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 model = Unet(
     dim=image_size,
@@ -557,7 +557,7 @@ optimizer = Adam(model.parameters(), lr=1e-3)
 
 from torchvision.utils import save_image
 
-epochs = 5
+epochs = 100
 
 for epoch in range(epochs):
     for step, batch in enumerate(dataloader):
@@ -573,16 +573,19 @@ for epoch in range(epochs):
       loss = p_losses(model, batch, t, loss_type="huber")
       
       if step % 100 == 0:
-        print("Loss:", loss.item())
+        print("Step: {} Loss: {}".format(step, loss.item()))
       # 计算Loss的梯度
       loss.backward()
       optimizer.step()
 
       # save generated images
-      if step != 0 and step % save_and_sample_every == 0:
+      if step % save_and_sample_every == 0:
+        print("Step:{} generate images".format(step))
         milestone = step // save_and_sample_every
         batches = num_to_groups(4, batch_size)
-        all_images_list = list(map(lambda n: sample(model, batch_size=n, channels=channels), batches))
-        all_images = torch.cat(all_images_list, dim=0)
+        all_images_list = list(map(lambda n: torch.tensor(sample(model, image_size, batch_size=n, channels=channels)), batches))
+        # all_images_list = list(map(lambda n: sample(model, image_size, batch_size=n, channels=channels), batches))
+        all_images = torch.cat(all_images_list, dim=0).transpose(0, 1)
         all_images = (all_images + 1) * 0.5
-        save_image(all_images, str(results_folder / f'sample-{milestone}.png'), nrow = 6)
+        for i in range(all_images.size(0)):
+            save_image(all_images[i], str(results_folder / f'sample-{epoch}-{milestone}-{i}.png'), nrow = 6)

@@ -483,7 +483,8 @@ print("Done Loading data")
 transformed_dataset = dataset.with_transform(transforms).remove_columns("label")
 
 # create dataloader
-dataloader = DataLoader(transformed_dataset["train"], batch_size=batch_size)
+# dataloader = DataLoader(transformed_dataset["train"], batch_size=batch_size)
+dataloader = DataLoader(transformed_dataset["train"], batch_size=batch_size, shuffle=True)
 
 batch = next(iter(dataloader))
 print(batch.keys())
@@ -537,7 +538,7 @@ def num_to_groups(num, divisor):
         arr.append(remainder)
     return arr
 
-results_folder = Path("./results")
+results_folder = Path("./results-shuffle")
 results_folder.mkdir(exist_ok = True)
 save_and_sample_every = 1000
 
@@ -555,37 +556,45 @@ model.to(device)
 
 optimizer = Adam(model.parameters(), lr=1e-3)
 
+print(model)
+
+n_parameters = sum(p.numel() for p in model.parameters())
+print(f'model parameters: {n_parameters}')
+
 from torchvision.utils import save_image
 
-epochs = 100
+epochs = 1000
 
 for epoch in range(epochs):
     for step, batch in enumerate(dataloader):
-      optimizer.zero_grad()
+        optimizer.zero_grad()
 
-      batch_size = batch["pixel_values"].shape[0]
-      batch = batch["pixel_values"].to(device)
+        batch_size = batch["pixel_values"].shape[0]
+        batch = batch["pixel_values"].to(device)
 
-      # t size [BS] - 从均匀分布给Batch每个样本产生一个随机t时刻
-      t = torch.randint(0, timesteps, (batch_size,), device=device).long()
-      
-      # loss [1] - loss 对应Algorithm1 的Line 5，即 标准正太分布和t时刻噪声的Loss
-      loss = p_losses(model, batch, t, loss_type="huber")
-      
-      if step % 100 == 0:
-        print("Step: {} Loss: {}".format(step, loss.item()))
-      # 计算Loss的梯度
-      loss.backward()
-      optimizer.step()
+        # t size [BS] - 从均匀分布给Batch每个样本产生一个随机t时刻
+        t = torch.randint(0, timesteps, (batch_size,), device=device).long()
+        
+        # loss [1] - loss 对应Algorithm1 的Line 5，即 标准正太分布和t时刻噪声的Loss
+        loss = p_losses(model, batch, t, loss_type="huber")
+        
+        if step % 100 == 0:
+            print("Epoch: {} Step: {} Loss: {}".format(epoch, step, loss.item()))
+        # 计算Loss的梯度
+        loss.backward()
+        optimizer.step()
 
-      # save generated images
-      if step % save_and_sample_every == 0:
-        print("Step:{} generate images".format(step))
-        milestone = step // save_and_sample_every
-        batches = num_to_groups(4, batch_size)
-        all_images_list = list(map(lambda n: torch.tensor(sample(model, image_size, batch_size=n, channels=channels)), batches))
-        # all_images_list = list(map(lambda n: sample(model, image_size, batch_size=n, channels=channels), batches))
-        all_images = torch.cat(all_images_list, dim=0).transpose(0, 1)
-        all_images = (all_images + 1) * 0.5
-        for i in range(all_images.size(0)):
-            save_image(all_images[i], str(results_folder / f'sample-{epoch}-{milestone}-{i}.png'), nrow = 6)
+        # save generated images
+        with torch.no_grad():
+            if step % save_and_sample_every == 0:
+                print("Epoch: {} Step:{} generate images".format(epoch, step))
+                milestone = step // save_and_sample_every
+                batches = num_to_groups(4, batch_size)
+                # all_images_list = list(map(lambda n: torch.tensor(sample(model, image_size, batch_size=n, channels=channels)), batches))
+                all_images_list = list(map(lambda n: torch.tensor(np.array(sample(model, image_size, batch_size=n, channels=channels))), batches))
+                all_images = torch.cat(all_images_list, dim=0).transpose(0, 1)
+                all_images = (all_images + 1) * 0.5
+                for i in range(all_images.size(0)):
+                    save_image(all_images[i], str(results_folder / f'sample-{epoch}-{milestone}-{i}.png'), nrow = 6)
+    # if epoch > 10:
+    #     break
